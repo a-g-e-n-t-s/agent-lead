@@ -26,6 +26,7 @@ import {
   setAgentTag,
   logger,
   timer,
+  loadDirective,
 } from 'agents-library';
 import type { BaseAgentConfig, AgentRole } from 'agents-library';
 import type { KadiClient } from '@kadi.build/core';
@@ -211,6 +212,15 @@ async function main(): Promise<void> {
 
   const baseAgent = new BaseAgent(baseAgentConfig);
   await baseAgent.connect(vault);
+
+  // Load directive
+  try {
+    const toolNames = baseAgent.client.readAgentJson().tools.map((t: any) => t.name);
+    const directive = await loadDirective(process.cwd(), { tools: toolNames, agentId });
+    if (directive) {
+      logger.info(agentId, `Loaded directive (${directive.length} chars): ${directive.trim().split('\n').find((l: string) => l.trim())?.trim().slice(0, 80)}`, timer.elapsed('main'));
+    }
+  } catch {}
 
   const client = baseAgent.client;
 
