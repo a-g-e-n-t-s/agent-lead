@@ -33,6 +33,8 @@ npm run start:artist
 npm run start:designer
 npm run start:programmer
 
+Note: the build pipeline (agent.json -> build.default.run) installs kadi helpers and kadi-secret (kadi install kadi-secret, kadi install) as part of the image build so runtime secret delivery and helpers are available in deployed images.
+
 Tools
 -----
 | Tool | Description |
@@ -51,31 +53,40 @@ The agent reads configuration from:
   - type: "agent"
   - version: "0.3.6"
   - entrypoint: "dist/index.js"
-  - scripts: dev, build, start, start:artist|designer|programmer, preflight, etc.
+  - scripts: preflight, setup (runs build), build, dev, dev:artist|designer|programmer, start, start:artist|designer|programmer, type-check, lint, test, clean
   - abilities:
     - secret-ability
     - ability-file-local
     - ability-log (^0.1.5)
   - brokers:
     - remote: wss://broker.dadavidtseng.com/kadi
+  - build (image build steps):
+    - installs dev deps, runs kadi install kadi-secret and kadi install, compiles with tsc, prunes dev deps
   - deploy: includes multiple Akash targets (akash-programmer, akash-artist, akash-designer, akash-all) with image: agent-lead:0.3.6, service env, exposed ports and secret vault delivery set to "broker"
+    - Deploy service commands explicitly run:
+      kadi secret receive --vault anthropic --vault model-manager --vault arcadedb && kadi run start:<role>
 
 - config.toml — local runtime configuration (gitignored secrets go in secrets.toml)
   - [agent]
-    - ID, VERSION, ROLE (default "programmer")
+    - ID = "agent-lead"
+    - VERSION = "0.3.0"
+    - ROLE = "programmer"
   - [logging]
-    - LEVEL (e.g. "debug")
+    - LEVEL = "debug"
   - [broker.remote]
     - URL = wss://broker.dadavidtseng.com/kadi
     - NETWORKS = role-specific networks (producer, programmer/artist/designer, git, qa, deploy, quest, file, global)
   - [provider]
     - PRIMARY = "model-manager"
     - FALLBACK = "anthropic"
-    - per-provider model selection (e.g. provider.model-manager.MODEL = "gpt-5-mini")
+  - [provider.model-manager]
+    - MODEL = "gpt-5-mini"
+  - [provider.anthropic]
+    - MODEL = "claude-haiku-4-5-20251001"
   - [memory]
     - DATA_PATH = "./data/memory"
   - [repo]
-    - PATH = "/mnt/c/GitHub/agent-playground" (example)
+    - PATH = "/mnt/c/GitHub/agent-playground"
   - [secrets]
     - VAULTS = ["anthropic","model-manager","arcadedb"]
     - KEYS = ["ANTHROPIC_API_KEY","MODEL_MANAGER_API_KEY","MODEL_MANAGER_BASE_URL","ARCADE_USERNAME","ARCADE_PASSWORD"]
@@ -112,7 +123,7 @@ Source files and build outputs:
 
 Note on credentials:
 - The agent imports loadVaultCredentials from agents-library and dotenv/config to obtain secrets/credentials. Credentials are expected to be managed by your runtime/vault and the agents-library helpers.
-- The agent.json deploy entries expect secrets to be available via vault delivery (anthropic, model-manager, arcadedb) and list required env vars for each vault.
+- The agent.json deploy entries expect secrets to be available via vault delivery (anthropic, model-manager, arcadedb) and list required env vars for each vault. Deployed images run kadi secret receive for the vaults before starting the agent.
 
 Architecture
 ------------
@@ -184,10 +195,6 @@ Helpful notes:
   - src/handlers/*.ts — individual handler implementations
 - The package declares ability dependencies in agent.json:
   - secret-ability, ability-file-local, ability-log
-- The agent.json includes deploy targets (Akash) with secret vault requirements and service definitions — see agent.json deploy entries for example images, commands and environment.
+- The agent.json includes deploy targets (Akash) with secret vault requirements and service definitions — see agent.json deploy entries for example images, commands and environment. Deployed services run kadi secret receive for the configured vaults (anthropic, model-manager, arcadedb) and expect the listed env vars to be populated via delivery = "broker".
 
 If you need to adapt provider credentials, add new handlers, or change per-role networks, update config.toml or wire new handlers into src/index.ts using the same pattern as setupTaskReceptionHandler, setupTaskVerificationHandler, setupPrWorkflowHandler, and setupQuestCleanupHandler.
-
----
-
----
