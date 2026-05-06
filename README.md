@@ -4,14 +4,14 @@
 
 Overview
 --------
-agent-lead is a kadi-agent (type: kadi-agent) that acts as a "lead" for different team roles (artist, designer, programmer). It registers with the Quest MCP, publishes a heartbeat, and attaches a set of handlers to coordinate task reception, verification, PR/workflow orchestration and quest cleanup. The agent is implemented in TypeScript and built to run via the Kadi runtime (Kadi broker interactions are performed through @kadi.build/core).
+agent-lead is a Kadi agent (type: agent) that acts as a "lead" for different team roles (artist, designer, programmer). It registers with the Quest MCP, publishes a heartbeat, and attaches a set of handlers to coordinate task reception, verification, PR/workflow orchestration and quest cleanup. The agent is implemented in TypeScript and built to run via the Kadi runtime (Kadi broker interactions are performed through @kadi.build/core).
 
 Quick Start
 -----------
 1. Install project dependencies:
 npm install
 
-2. Install Kadi runtime (if you use the Kadi CLI/local runtime):
+2. Install Kadi runtime/helpers (if you use the Kadi CLI/local runtime):
 kadi install
 
 3. Start the agent via Kadi (or run locally):
@@ -45,16 +45,52 @@ Tools
 Configuration
 -------------
 The agent reads configuration from:
-- agent.json (root) — contains package metadata, build instructions, abilities and default broker URL
-  - abilities.secret-ability — declared ability dependency in agent.json
-  - brokers.default — default broker URL (ws://localhost:8080/kadi)
-- Environment variables (dotfile support via dotenv)
+
+- agent.json (root) — contains package metadata, scripts, build/deploy instructions, abilities and broker URLs
+  - name: "agent-lead"
+  - type: "agent"
+  - version: "0.3.6"
+  - entrypoint: "dist/index.js"
+  - scripts: dev, build, start, start:artist|designer|programmer, preflight, etc.
+  - abilities:
+    - secret-ability
+    - ability-file-local
+    - ability-log (^0.1.5)
+  - brokers:
+    - remote: wss://broker.dadavidtseng.com/kadi
+  - deploy: includes multiple Akash targets (akash-programmer, akash-artist, akash-designer, akash-all) with image: agent-lead:0.3.6, service env, exposed ports and secret vault delivery set to "broker"
+
+- config.toml — local runtime configuration (gitignored secrets go in secrets.toml)
+  - [agent]
+    - ID, VERSION, ROLE (default "programmer")
+  - [logging]
+    - LEVEL (e.g. "debug")
+  - [broker.remote]
+    - URL = wss://broker.dadavidtseng.com/kadi
+    - NETWORKS = role-specific networks (producer, programmer/artist/designer, git, qa, deploy, quest, file, global)
+  - [provider]
+    - PRIMARY = "model-manager"
+    - FALLBACK = "anthropic"
+    - per-provider model selection (e.g. provider.model-manager.MODEL = "gpt-5-mini")
+  - [memory]
+    - DATA_PATH = "./data/memory"
+  - [repo]
+    - PATH = "/mnt/c/GitHub/agent-playground" (example)
+  - [secrets]
+    - VAULTS = ["anthropic","model-manager","arcadedb"]
+    - KEYS = ["ANTHROPIC_API_KEY","MODEL_MANAGER_API_KEY","MODEL_MANAGER_BASE_URL","ARCADE_USERNAME","ARCADE_PASSWORD"]
+  - [arcadedb]
+    - HOST, PORT, USERNAME, DATABASE
+  - [roles.*]
+    - Per-role NETWORKS (see config.toml for artist, designer, programmer)
+
+Environment variables (dotfile support via dotenv)
   - AGENT_ROLE — role for this instance. Valid values: artist, designer, programmer. Default: programmer
-  - KADI_BROKER_URL — broker URL override. Default: ws://localhost:8080/kadi
+  - (Secrets) ANTHROPIC_API_KEY, MODEL_MANAGER_API_KEY, MODEL_MANAGER_BASE_URL, ARCADE_USERNAME, ARCADE_PASSWORD — typically provided via vaults or secrets delivery
 
 Key runtime defaults and values in code:
 - Valid roles: ['artist', 'designer', 'programmer']
-- Role-based network mapping (ROLE_NETWORKS in src/index.ts):
+- Role-based network mapping (ROLE_NETWORKS in src/index.ts / config):
   - artist → ['producer', 'artist', 'git', 'qa', 'quest', 'file', 'global']
   - designer → ['producer', 'designer', 'git', 'qa', 'quest', 'file', 'global']
   - programmer → ['producer', 'programmer', 'git', 'qa', 'deploy', 'quest', 'file', 'global']
@@ -66,7 +102,8 @@ Key runtime defaults and values in code:
   - capabilities: ['task-coordination','task-verification','pr-creation','workflow-management']
   - maxConcurrentTasks: 10
 - Heartbeat:
-  - Sent every 30 seconds to the Quest MCP via RPC 'quest_quest_agent_heartbeat'
+  - Sent periodically to the Quest MCP via RPC 'quest_quest_agent_heartbeat' (defaults in code)
+  - Heartbeats are managed by startHeartbeat
 
 Source files and build outputs:
 - Source: src/index.ts (entry), src/handlers/*.ts (handlers)
@@ -75,6 +112,7 @@ Source files and build outputs:
 
 Note on credentials:
 - The agent imports loadVaultCredentials from agents-library and dotenv/config to obtain secrets/credentials. Credentials are expected to be managed by your runtime/vault and the agents-library helpers.
+- The agent.json deploy entries expect secrets to be available via vault delivery (anthropic, model-manager, arcadedb) and list required env vars for each vault.
 
 Architecture
 ------------
@@ -92,14 +130,13 @@ Key components
 
 Data flow
 1. Startup:
-   - src/index.ts validates AGENT_ROLE and builds agentName and networks.
-   - Agent connects to the broker at KADI_BROKER_URL (default ws://localhost:8080/kadi) using KadiClient.
+   - src/index.ts validates AGENT_ROLE and builds agentName and networks (reads config.toml / env as available).
+   - Agent connects to the broker at the configured broker URL (commonly the remote broker wss://broker.dadavidtseng.com/kadi) using KadiClient.
 2. Registration:
    - registerAgent invokes 'quest_quest_register_agent' with agent details (capabilities, maxConcurrentTasks).
    - The returned payload is parsed to confirm registration.
 3. Heartbeat:
    - The agent sends periodic heartbeats to 'quest_quest_agent_heartbeat' (status: available, currentTasks: [], timestamp).
-   - Heartbeats run every 30 seconds via startHeartbeat.
 4. Task handling:
    - Registered handlers (task-reception, task-verification, pr-workflow, quest-cleanup) subscribe to relevant network events and RPCs through the BaseAgent/KadiClient and perform business logic.
    - Handlers communicate back to Quest MCP or other services via Kadi RPCs.
@@ -145,51 +182,10 @@ Helpful notes:
 - Source entry:
   - src/index.ts — main bootstrapping, registration, heartbeat and handler wiring
   - src/handlers/*.ts — individual handler implementations
-- The package declares an ability dependency in agent.json:
-  - abilities.secret-ability: ^0.9.3
-- The default broker entry in agent.json:
-  - brokers.default: ws://localhost:8080/kadi
+- The package declares ability dependencies in agent.json:
+  - secret-ability, ability-file-local, ability-log
+- The agent.json includes deploy targets (Akash) with secret vault requirements and service definitions — see agent.json deploy entries for example images, commands and environment.
 
-If you need to adapt provider credentials or add new handlers, implement them under src/handlers and wire them into src/index.ts using the same pattern as setupTaskReceptionHandler, setupTaskVerificationHandler, setupPrWorkflowHandler, and setupQuestCleanupHandler.
+If you need to adapt provider credentials, add new handlers, or change per-role networks, update config.toml or wire new handlers into src/index.ts using the same pattern as setupTaskReceptionHandler, setupTaskVerificationHandler, setupPrWorkflowHandler, and setupQuestCleanupHandler.
 
-## Quick Start
-
-```bash
-cd agent-lead
-npm install
-kadi install
-kadi run start
-```
-
-## Tools
-
-<!-- TODO: Add Tools content -->
-
-## Configuration
-
-### agent.json
-
-| Field | Value |
-|-------|-------|
-| **Version** | 0.2.0 |
-| **Type** | N/A |
-
-### Abilities
-
-- `secret-ability` ^0.9.3
-
-### Brokers
-
-- **default**: `ws://localhost:8080/kadi`
-
-## Architecture
-
-<!-- TODO: Add Architecture content -->
-
-## Development
-
-```bash
-npm install
-npm run build
-kadi run start
-```
+---
