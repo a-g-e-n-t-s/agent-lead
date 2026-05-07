@@ -100,7 +100,15 @@ async function getStatus(client: KadiClient, path: string): Promise<{
   const result = await client.invokeRemote<{
     content: Array<{ type: string; text: string }>;
   }>('git_git_status', { path });
-  return parseGitResponse(result);
+  const parsed = parseGitResponse(result);
+  // Sanitize conflictedFiles: strip any leading git blob hashes/metadata, keep only the file path
+  if (Array.isArray(parsed.conflictedFiles)) {
+    parsed.conflictedFiles = parsed.conflictedFiles.map((entry: string) => {
+      const tokens = entry.trim().split(/\s+/);
+      return tokens[tokens.length - 1];
+    });
+  }
+  return parsed;
 }
 
 /**
