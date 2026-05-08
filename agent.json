@@ -1,7 +1,7 @@
 {
   "name": "agent-lead",
   "type": "agent",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "entrypoint": "dist/index.js",
   "scripts": {
     "preflight": "node -e \"const fs=require('fs');if(!fs.existsSync('node_modules')){console.error('Dependencies not installed. Run: npm install');process.exit(1)}console.log('✓ Dependencies OK')\"",
@@ -48,7 +48,7 @@
       "engine": "podman",
       "services": {
         "app": {
-          "image": "agent-lead:0.3.7",
+          "image": "agent-lead:0.3.8",
           "command": [
             "sh",
             "-c",
@@ -120,7 +120,7 @@
       "engine": "podman",
       "services": {
         "app": {
-          "image": "agent-lead:0.3.7",
+          "image": "agent-lead:0.3.8",
           "command": [
             "sh",
             "-c",
@@ -192,7 +192,7 @@
       "engine": "podman",
       "services": {
         "app": {
-          "image": "agent-lead:0.3.7",
+          "image": "agent-lead:0.3.8",
           "command": [
             "sh",
             "-c",
@@ -264,7 +264,7 @@
       "engine": "podman",
       "services": {
         "programmer": {
-          "image": "agent-lead:0.3.7",
+          "image": "agent-lead:0.3.8",
           "command": [
             "sh",
             "-c",
@@ -299,7 +299,7 @@
           }
         },
         "artist": {
-          "image": "agent-lead:0.3.7",
+          "image": "agent-lead:0.3.8",
           "command": [
             "sh",
             "-c",
@@ -334,7 +334,7 @@
           }
         },
         "designer": {
-          "image": "agent-lead:0.3.7",
+          "image": "agent-lead:0.3.8",
           "command": [
             "sh",
             "-c",
