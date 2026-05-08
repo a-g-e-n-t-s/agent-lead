@@ -51,7 +51,7 @@ The agent reads configuration from:
 - agent.json (root) — contains package metadata, scripts, build/deploy instructions, abilities and broker URLs
   - name: "agent-lead"
   - type: "agent"
-  - version: "0.3.7"
+  - version: "0.3.8"
   - entrypoint: "dist/index.js"
   - scripts: preflight, setup (runs build), build, dev, dev:artist|designer|programmer, start, start:artist|designer|programmer, type-check, lint, test, clean
   - abilities:
@@ -62,7 +62,7 @@ The agent reads configuration from:
     - remote: wss://broker.dadavidtseng.com/kadi
   - build (image build steps):
     - installs dev deps, runs kadi install kadi-secret and kadi install, compiles with tsc, prunes dev deps
-  - deploy: includes multiple Akash targets (akash-programmer, akash-artist, akash-designer, akash-all) with image: agent-lead:0.3.7, service env, exposed ports and secret vault delivery set to "broker"
+  - deploy: includes multiple Akash targets (akash-programmer, akash-artist, akash-designer, akash-all) with image: agent-lead:0.3.8, service env, exposed ports and secret vault delivery set to "broker"
     - Deploy service commands explicitly run:
       kadi secret receive --vault anthropic --vault model-manager --vault arcadedb && kadi run start:<role>
 
